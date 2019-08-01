@@ -4,8 +4,7 @@ A bash script for adding/updating Curatescape plugins on an existing Omeka insta
 # how to use it
 Upload the `curatescape_utility.sh` file to your server (manually or with something like...) 
 ```
-$ wget /path/to/curatescape_utility.sh # or...
-$ curl -o /path/to/curatescape_utility.sh # etc...
+$ wget https://raw.githubusercontent.com/ebellempire/curatescape_utility/master/curatescape_utility.sh
 ```
 Then just run it like any shell script, including one or more arguments indicating the location of the installation(s)
 ```
