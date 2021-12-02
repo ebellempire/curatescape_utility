@@ -30,3 +30,7 @@ The script does not install Omeka. It does not upgrade Omeka. It does not backup
 This script assumes that the default branch for all repositories is called "master." You should be able to add additional themes and plugins here, but they'll _all_ need to have a `master` branch. If your repo's default branch is `main` (or something else), you'll need to update the script to handle that. So far, I haven't had a reason to do so. Pull requests welcome.
 
 This script also assumes that your theme repositories will be structured like the two default Curatescape themes, i.e. where the actual theme directory sits inside the root directory, next to the .git file (e.g. _theme-curatescape/curatescape/_). This is another limitation I haven't had occasion to address. If your theme repo is not structured in this manner, you'll need to update the script. Pull requests welcome.
+
+This script _also_ assumes the latest tag corresponds to the latest production release. Again, pull requests welcome.
+
+You might want to occasionally remove the `curatescape_utlity` directory, which can get pretty big from always checking out the latest tag. Just run `rm -rf curatescape_utlity` as needed.
