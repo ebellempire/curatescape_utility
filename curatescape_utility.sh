@@ -61,9 +61,9 @@ if ! [ -x "$(command -v git)" ]
 		    do
 			    ### just the repo (removes owner from path)
 			    REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2) 
-			    
-			    ### just the repo (removes prefix from repo name)
-			    REPO_DIR=$(echo $REPO_DIR_PREFIXED | cut -d "-" -f 2) 
+				
+			    ### just the plugin (removes plugin- prefix from repo name)
+			    REPO_DIR=${REPO_DIR_PREFIXED/plugin-/}	
 			    
 				if [ ! -d ${PLUGINS_DIR}/${REPO_DIR} ]
 				
@@ -95,12 +95,12 @@ if ! [ -x "$(command -v git)" ]
 			echo -e ${GREEN}"█ Checking theme repos...\n" ${NOCOLOR}
 			for REPO_NAME in "${GITHUB_REPOS_THEMES[@]}"			
 		    do
-			    ### just the repo (removes owner from path)
-			    REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2) 
-			    
-			    ### just the repo (removes prefix from repo name)
-			    REPO_DIR=$(echo $REPO_DIR_PREFIXED | cut -d "-" -f 2) 
-			    
+				### just the repo (removes owner from path)
+				REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2) 
+				
+				### just the plugin (removes theme- prefix from repo name)
+				REPO_DIR=${REPO_DIR_PREFIXED/theme-/}	
+				
 				if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]
 				
 					then
