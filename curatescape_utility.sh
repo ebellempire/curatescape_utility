@@ -132,12 +132,12 @@ if ! [ -x "$(command -v git)" ]
 				if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php
 				    then 	
 				    	echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
-				    	echo -e ${CYAN}"█ Copying required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
+				    	echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
 				    	rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
 						
-				    	echo -e ${CYAN}"\n█ Copying recommended themes to ${SITE}/themes ..." ${NOCOLOR}
 				    	rsync -a --stats --exclude='.git/' $THEMES_DIR/curatescape/curatescape ${SITE}/themes
 				    	# (this will need to be updated if there is ever an additional/different theme)
+				    	echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
 
 				    	SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
 
