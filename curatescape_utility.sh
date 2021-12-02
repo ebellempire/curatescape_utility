@@ -135,9 +135,11 @@ if ! [ -x "$(command -v git)" ]
 				    	echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
 				    	rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
 						
-				    	rsync -a --stats --exclude='.git/' $THEMES_DIR/curatescape/curatescape ${SITE}/themes
-				    	# (this will need to be updated if there is ever an additional/different theme)
 				    	echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
+						for THEME_PATH in ${THEMES_DIR}/*
+						do
+							rsync -a --stats --exclude='.git/' $THEMES_DIR/$(basename $THEME_PATH)/$(basename $THEME_PATH) ${SITE}/themes
+						done
 
 				    	SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
 
