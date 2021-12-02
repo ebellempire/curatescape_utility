@@ -26,6 +26,8 @@ GITHUB_REPOS_PLUGINS=(
 	CPHDH/SuperRss
 )
 
+# it's assumed that the actual theme dir exists *inside* the root dir, e.g. omeka/theme-berlin/berlin
+# it's assumed that the theme repo has a branch called "master" that's always up to date
 GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
 	CPHDH/theme-curatescape-echo
