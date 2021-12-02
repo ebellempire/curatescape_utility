@@ -28,6 +28,7 @@ GITHUB_REPOS_PLUGINS=(
 
 GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
+	CPHDH/theme-curatescape-echo
 )
 
 if [ $# -eq 0 ] 
