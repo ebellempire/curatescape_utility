@@ -19,16 +19,16 @@ GITHUB_REPOS_PLUGINS=(
 	CPHDH/CuratescapeJSON
 	CPHDH/CuratescapeAdminHelper
 	CPHDH/TourBuilder
+	CPHDH/SuperRss
 	omeka/plugin-Geolocation
 	omeka/plugin-SimplePages
 	omeka/plugin-SimpleVocab
 	ebellempire/MoreUserRoles
-	CPHDH/SuperRss
 	ebellempire/SubjectsBrowse
 )
 
-# it's assumed that the actual theme dir exists *inside* the root dir, e.g. omeka/theme-berlin/berlin
-# it's assumed that the theme repo has a branch called "master" that's always up to date
+# it's assumed that the actual theme dir exists *inside* the root dir, e.g. CPHDH/theme-curatescape/curatescape
+# it's assumed that the theme repo has a default branch called "master" (if "main" you'll need to update the script)
 GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
 	CPHDH/theme-curatescape-echo
