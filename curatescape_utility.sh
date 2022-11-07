@@ -24,6 +24,7 @@ GITHUB_REPOS_PLUGINS=(
 	omeka/plugin-SimpleVocab
 	ebellempire/MoreUserRoles
 	CPHDH/SuperRss
+	ebellempire/SubjectsBrowse
 )
 
 # it's assumed that the actual theme dir exists *inside* the root dir, e.g. omeka/theme-berlin/berlin
