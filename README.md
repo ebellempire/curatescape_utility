@@ -18,7 +18,7 @@ $ sh curatescape_utility.sh path/to/omeka another/path/to/omeka
 ```
 Depending on your server configuration, you may need to use the following syntax instead:
 ```
-$ bash ./curatescape_utility.sh arlingtonhistorical.com path/to/omeka
+$ bash ./curatescape_utility.sh path/to/omeka
 ```
 
 # what it does
