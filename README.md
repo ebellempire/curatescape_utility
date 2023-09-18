@@ -4,17 +4,21 @@ A bash script for adding/updating [Curatescape](https://curatescape.org) tools o
 
 # how to use it
 
-Upload the `curatescape_utility.sh` file to your server (manually or with something like...)
+Upload the `curatescape_utility.sh` file to your server (manually or with something like...):
 
 ```
 $ wget https://raw.githubusercontent.com/ebellempire/curatescape_utility/master/curatescape_utility.sh
 ```
 
-Then just run it like any shell script, including one or more arguments indicating the location of the installation(s)
+Then just run it like any shell script, including one or more arguments indicating the location of the installation(s):
 
 ```
 $ sh curatescape_utility.sh path/to/omeka
 $ sh curatescape_utility.sh path/to/omeka another/path/to/omeka
+```
+Depending on your server configuration, you may need to use the following syntax instead:
+```
+$ bash ./curatescape_utility.sh arlingtonhistorical.com path/to/omeka
 ```
 
 # what it does
