@@ -37,4 +37,8 @@ This script also assumes that your theme repositories will be structured like th
 
 This script _also_ assumes the latest tag corresponds to the latest production release. Again, pull requests welcome.
 
+Lastly, but _importantly_, this script deletes the contents of the robots.txt file to ensure that social media previews are able to display images. Run the script after core updates to ensure that social media crawlers can access the files directory. If you have customized your robots.txt file, you will need to restore those customizations after running the script
+
+# maintenance
+
 You might want to occasionally remove the `curatescape_utlity` directory, which can get pretty big from always checking out the latest tag. Just run `rm -rf curatescape_utlity` as needed.
