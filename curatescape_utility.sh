@@ -146,8 +146,6 @@ if ! [ -x "$(command -v git)" ]
 				if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php
 					then 	
 						echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
-						echo -e ${CYAN}"\n█ Truncating robots.txt file for ${SITE}...\n" ${NOCOLOR}
-						truncate -s 0 ${SITE}/robots.txt
 						echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
 						rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
 						echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
