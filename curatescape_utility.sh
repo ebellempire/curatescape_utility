@@ -27,7 +27,7 @@ GITHUB_REPOS_PLUGINS=(
 	ebellempire/SubjectsBrowse
 )
 
-# it's assumed that the actual theme dir exists *inside* the root dir, e.g. CPHDH/theme-curatescape/curatescape
+# Theme directory structure is automatically detected using theme.ini
 GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
 	CPHDH/theme-curatescape-echo
@@ -38,6 +38,29 @@ get_latest_release() {
   curl --silent "https://api.github.com/repos/$1/releases/latest" |
   grep '"tag_name":' |
   sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+# Function to detect the actual theme directory
+# Looks for theme.ini to determine if theme is in root or subdirectory
+find_theme_dir() {
+  local REPO_PATH=$1
+
+  # Check if theme.ini exists in the root
+  if [ -f "${REPO_PATH}/theme.ini" ]; then
+    echo "${REPO_PATH}"
+    return
+  fi
+
+  # Check subdirectories for theme.ini
+  for SUBDIR in ${REPO_PATH}/*/; do
+    if [ -f "${SUBDIR}theme.ini" ]; then
+      echo "${SUBDIR%/}"
+      return
+    fi
+  done
+
+  # Fallback: assume nested structure (current behavior)
+  echo "${REPO_PATH}/$(basename ${REPO_PATH})"
 }
 
 if [ $# -eq 0 ] 
@@ -106,9 +129,9 @@ if ! [ -x "$(command -v git)" ]
 			for REPO_NAME in "${GITHUB_REPOS_THEMES[@]}"			
 		    do
 				### just the repo (removes owner from path)
-				REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2) 
-				
-				### just the plugin (removes theme- prefix from repo name)
+				REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
+
+				### just the theme (removes theme- prefix from repo name)
 				REPO_DIR=${REPO_DIR_PREFIXED/theme-/}	
 				
 				if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]
@@ -152,7 +175,8 @@ if ! [ -x "$(command -v git)" ]
 				    	echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
 						for THEME_PATH in ${THEMES_DIR}/*
 						do
-							rsync -a --stats --exclude='.git/' $THEMES_DIR/$(basename $THEME_PATH)/$(basename $THEME_PATH) ${SITE}/themes
+							ACTUAL_THEME_DIR=$(find_theme_dir ${THEME_PATH})
+							rsync -a --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
 						done
 
 				    	SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
