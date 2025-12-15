@@ -28,11 +28,17 @@ GITHUB_REPOS_PLUGINS=(
 )
 
 # it's assumed that the actual theme dir exists *inside* the root dir, e.g. CPHDH/theme-curatescape/curatescape
-# it's assumed that the theme repo has a default branch called "master" (if "main" you'll need to update the script)
 GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
 	CPHDH/theme-curatescape-echo
 )
+
+# Function to get the latest GitHub release tag
+get_latest_release() {
+  curl --silent "https://api.github.com/repos/$1/releases/latest" |
+  grep '"tag_name":' |
+  sed -E 's/.*"([^"]+)".*/\1/'
+}
 
 if [ $# -eq 0 ] 
 	then
@@ -75,20 +81,20 @@ if ! [ -x "$(command -v git)" ]
 						echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
 						git clone https://github.com/${REPO_NAME}.git ${PLUGINS_DIR}/${REPO_DIR}
 						cd ${PLUGINS_DIR}/${REPO_DIR}
-						
-						latesttag=$(git describe --tags)
-						echo -e ${CYAN}"Checking out the latest tagged version of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
+
+						latesttag=$(get_latest_release ${REPO_NAME})
+						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
 						git checkout -q ${latesttag}
 						cd ${SCRIPT_LOCATION}		
 											
 					else
 						echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-						
+
 						cd ${PLUGINS_DIR}/${REPO_DIR}
-						git pull origin master
-						
-						latesttag=$(git describe --tags)
-						echo -e ${CYAN}"Checking out the latest tagged version of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
+						git fetch --tags origin
+
+						latesttag=$(get_latest_release ${REPO_NAME})
+						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
 						git checkout -q ${latesttag}
 						cd ${SCRIPT_LOCATION}			
 				fi
@@ -106,25 +112,25 @@ if ! [ -x "$(command -v git)" ]
 				REPO_DIR=${REPO_DIR_PREFIXED/theme-/}	
 				
 				if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]
-				
+
 					then
 						echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
 						git clone https://github.com/${REPO_NAME}.git ${THEMES_DIR}/${REPO_DIR}
 						cd ${THEMES_DIR}/${REPO_DIR}
-						
-						latesttag=$(git describe --tags)
-						echo -e ${CYAN}"Checking out the latest tagged version of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
+
+						latesttag=$(get_latest_release ${REPO_NAME})
+						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
 						git checkout -q ${latesttag}
 						cd ${SCRIPT_LOCATION}		
 											
 					else
 						echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-						
+
 						cd ${THEMES_DIR}/${REPO_DIR}
-						git pull origin master
-						
-						latesttag=$(git describe --tags)
-						echo -e ${CYAN}"Checking out the latest tagged version of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
+						git fetch --tags origin
+
+						latesttag=$(get_latest_release ${REPO_NAME})
+						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
 						git checkout -q ${latesttag}
 						cd ${SCRIPT_LOCATION}			
 				fi
