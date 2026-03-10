@@ -135,7 +135,7 @@ if ! [ -x "$(command -v git)" ]
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
 				cd ${SCRIPT_LOCATION}
 			else
 				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
@@ -144,7 +144,7 @@ if ! [ -x "$(command -v git)" ]
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
 				cd ${SCRIPT_LOCATION}
 			fi
 		done
@@ -173,7 +173,7 @@ if ! [ -x "$(command -v git)" ]
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
 				cd ${SCRIPT_LOCATION}
 			else
 				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
@@ -182,7 +182,7 @@ if ! [ -x "$(command -v git)" ]
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
 				cd ${SCRIPT_LOCATION}
 			fi
 		done
