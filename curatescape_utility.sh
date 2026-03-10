@@ -195,7 +195,7 @@ if ! [ -x "$(command -v git)" ]
 				echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
 				for THEME_PATH in ${THEMES_DIR}/*; do
 					ACTUAL_THEME_DIR=$(find_theme_dir ${THEME_PATH})
-					rsync -a --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
+					rsync -a --delete --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
 				done
 				SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
 			else
