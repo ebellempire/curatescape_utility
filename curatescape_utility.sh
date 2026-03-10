@@ -16,10 +16,10 @@ BOLD=$(tput bold)
 NORMAL=$(tput sgr0)
 
 GITHUB_REPOS_PLUGINS=(
-	CPHDH/Curatescape
+	CPHDH/Curatescape@master
 	CPHDH/CuratescapeSeo
 	CPHDH/CuratescapeGalleries
-	omeka/plugin-Geolocation
+	omeka/plugin-Geolocation@master
 	omeka/plugin-SimplePages
 	omeka/plugin-SimpleVocab
 	ebellempire/MoreUserRoles
@@ -34,9 +34,39 @@ GITHUB_REPOS_THEMES=(
 
 # Get the latest GitHub release tag
 get_latest_release() {
-	curl --silent "https://api.github.com/repos/$1/releases/latest" | 
-	grep '"tag_name":' | 
+	curl --silent "https://api.github.com/repos/$1/releases/latest" |
+	grep '"tag_name":' |
 	sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+# Resolve a ref to checkout: "latest" fetches the latest release, otherwise use as-is
+# Supports: owner/repo@latest, owner/repo@1.0, owner/repo@master, or owner/repo (defaults to latest)
+resolve_ref() {
+	local REPO=$1
+	local REF=$2
+	if [ -z "$REF" ] || [ "$REF" = "latest" ]; then
+		get_latest_release "$REPO"
+	else
+		echo "$REF"
+	fi
+}
+
+# Clone a repo shallowly and handle failure by cleaning up the partial directory
+# Passes --branch if a non-"latest" ref is known, to minimize data fetched
+clone_repo() {
+	local REPO_NAME=$1
+	local DEST=$2
+	local REF=$3
+	local BRANCH_ARG=""
+	if [ -n "$REF" ] && [ "$REF" != "latest" ]; then
+		BRANCH_ARG="--branch $REF"
+	fi
+	if ! git clone --depth 1 $BRANCH_ARG "https://github.com/${REPO_NAME}.git" "$DEST"; then
+		echo -e "${RED}█ ERROR: Failed to clone '${REPO_NAME}'. Cleaning up and skipping.${NOCOLOR}"
+		rm -rf "$DEST"
+		return 1
+	fi
+	return 0
 }
 
 # Get theme structure using location of theme.ini
@@ -61,7 +91,7 @@ find_theme_dir() {
 	echo "${REPO_PATH}/$(basename ${REPO_PATH})"
 }
 
-if [ $# -eq 0 ] 
+if [ $# -eq 0 ]
 	then
 		echo -e ${RED}"█ Oops, you forgot to include an argument! ${NOCOLOR}\nPlease include at least one path to an existing Omeka installation. Here's an example: \n${YELLOW}sh curatescape_utility.sh path/to/omeka1 path/to/omeka2" ${NOCOLOR}; exit 1;
 fi
@@ -82,84 +112,97 @@ if ! [ -x "$(command -v git)" ]
 		echo -e ${GREEN}"█ Working directory verified ('${DIR}')" ${NOCOLOR}
 		# PLUGINS
 		echo -e ${GREEN}"█ Checking plugin repos ...\n" ${NOCOLOR}
-		for REPO_NAME in "${GITHUB_REPOS_PLUGINS[@]}"
-			do
-				### just the repo (removes owner from path)
-				REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2) 
-				### just the plugin (removes plugin- prefix from repo name)
-				REPO_DIR=${REPO_DIR_PREFIXED/plugin-/}
-				if [ ! -d ${PLUGINS_DIR}/${REPO_DIR} ]
-					then
-						echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
-						git clone https://github.com/${REPO_NAME}.git ${PLUGINS_DIR}/${REPO_DIR}
-						cd ${PLUGINS_DIR}/${REPO_DIR}
-
-						latesttag=$(get_latest_release ${REPO_NAME})
-						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
-						git checkout -q ${latesttag}
-						cd ${SCRIPT_LOCATION}
-				else
-						echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-
-						cd ${PLUGINS_DIR}/${REPO_DIR}
-						git fetch --tags origin
-
-						latesttag=$(get_latest_release ${REPO_NAME})
-						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
-						git checkout -q ${latesttag}
-						cd ${SCRIPT_LOCATION}
+		for REPO_SPEC in "${GITHUB_REPOS_PLUGINS[@]}"; do
+			### parse "owner/repo@ref" or "owner/repo"
+			if echo "$REPO_SPEC" | grep -q '@'; then
+				REPO_NAME="${REPO_SPEC%@*}"
+				REPO_REF="${REPO_SPEC#*@}"
+			else
+				REPO_NAME="$REPO_SPEC"
+				REPO_REF="latest"
+			fi
+			### just the repo (removes owner from path)
+			REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
+			### just the plugin (removes plugin- prefix from repo name)
+			REPO_DIR=${REPO_DIR_PREFIXED/plugin-/}
+			if [ ! -d ${PLUGINS_DIR}/${REPO_DIR} ]; then
+				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
+				if ! clone_repo "$REPO_NAME" "${PLUGINS_DIR}/${REPO_DIR}" "$REPO_REF"; then
+					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
+					continue
 				fi
-			done
-			# THEMES
-			echo -e ${GREEN}"█ Checking theme repos...\n" ${NOCOLOR}
-			for REPO_NAME in "${GITHUB_REPOS_THEMES[@]}"			
-				do
-				### just the repo (removes owner from path)
-				REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
-				### just the theme (removes theme- prefix from repo name)
-				REPO_DIR=${REPO_DIR_PREFIXED/theme-/}	
-				if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]
-					then
-						echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
-						git clone https://github.com/${REPO_NAME}.git ${THEMES_DIR}/${REPO_DIR}
-						cd ${THEMES_DIR}/${REPO_DIR}
-	
-						latesttag=$(get_latest_release ${REPO_NAME})
-						echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
-						git checkout -q ${latesttag}
-						cd ${SCRIPT_LOCATION}
-				else
-					echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-
-					cd ${THEMES_DIR}/${REPO_DIR}
-					git fetch --tags origin
-
-					latesttag=$(get_latest_release ${REPO_NAME})
-					echo -e ${CYAN}"Checking out the latest release of ${REPO_NAME} (${latesttag}) \n" ${NOCOLOR}
-					git checkout -q ${latesttag}
-					cd ${SCRIPT_LOCATION}
+				cd ${PLUGINS_DIR}/${REPO_DIR}
+				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
+				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+				git checkout -q "$CHECKOUT_REF"
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				cd ${SCRIPT_LOCATION}
+			else
+				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
+				cd ${PLUGINS_DIR}/${REPO_DIR}
+				git fetch --depth 1 --tags origin
+				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
+				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+				git checkout -q "$CHECKOUT_REF"
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				cd ${SCRIPT_LOCATION}
+			fi
+		done
+		# THEMES
+		echo -e ${GREEN}"█ Checking theme repos...\n" ${NOCOLOR}
+		for REPO_SPEC in "${GITHUB_REPOS_THEMES[@]}"; do
+			### parse "owner/repo@ref" or "owner/repo"
+			if echo "$REPO_SPEC" | grep -q '@'; then
+				REPO_NAME="${REPO_SPEC%@*}"
+				REPO_REF="${REPO_SPEC#*@}"
+			else
+				REPO_NAME="$REPO_SPEC"
+				REPO_REF="latest"
+			fi
+			### just the repo (removes owner from path)
+			REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
+			### just the theme (removes theme- prefix from repo name)
+			REPO_DIR=${REPO_DIR_PREFIXED/theme-/}
+			if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]; then
+				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
+				if ! clone_repo "$REPO_NAME" "${THEMES_DIR}/${REPO_DIR}" "$REPO_REF"; then
+					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
+					continue
 				fi
-			done
-			for SITE in "$@"
-				do
-				if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php
-					then 	
-						echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
-						echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
-						rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
-						echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
-						for THEME_PATH in ${THEMES_DIR}/*
-						do
-							ACTUAL_THEME_DIR=$(find_theme_dir ${THEME_PATH})
-							rsync -a --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
-						done
-						SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
-					else
-						echo -e ${YELLOW}"\n█ Omeka installation not found at ${SITE}. Skipping this directory.\n" ${NOCOLOR}
-						SUMMARY+="\n${YELLOW}${BOLD}✗ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Skipped (not an Omeka installation)\n"${NOCOLOR}
-				fi
-			done
-	printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
-	echo -e ${CYAN}"\n\n${SUMMARY}\n\n" ${NOCOLOR}
-	printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
+				cd ${THEMES_DIR}/${REPO_DIR}
+				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
+				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+				git checkout -q "$CHECKOUT_REF"
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				cd ${SCRIPT_LOCATION}
+			else
+				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
+				cd ${THEMES_DIR}/${REPO_DIR}
+				git fetch --depth 1 --tags origin
+				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
+				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+				git checkout -q "$CHECKOUT_REF"
+				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git pull -q; fi
+				cd ${SCRIPT_LOCATION}
+			fi
+		done
+		for SITE in "$@"; do
+			if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php; then
+				echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
+				echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
+				rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
+				echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
+				for THEME_PATH in ${THEMES_DIR}/*; do
+					ACTUAL_THEME_DIR=$(find_theme_dir ${THEME_PATH})
+					rsync -a --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
+				done
+				SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
+			else
+				echo -e ${YELLOW}"\n█ Omeka installation not found at ${SITE}. Skipping this directory.\n" ${NOCOLOR}
+				SUMMARY+="\n${YELLOW}${BOLD}✗ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Skipped (not an Omeka installation)\n"${NOCOLOR}
+			fi
+		done
+		printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
+		echo -e ${CYAN}"\n\n${SUMMARY}\n\n" ${NOCOLOR}
+		printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
 fi
