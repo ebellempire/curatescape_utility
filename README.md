@@ -23,7 +23,16 @@ $ bash ./curatescape_utility.sh path/to/omeka
 
 # what it does
 
-The script creates a new folder in your `~` home directory called `curatescape_utility` and into that pulls the latest tagged versions of [all required and optional](https://github.com/CPHDH/Curatescape#server-side-setup) Curatescape plugins, as well as the Curatescape theme (if any of the repos already exist there, it will check for updates). Then the script will copy the most recent theme and plugin versions (sans `.git` files) to where they need to go in the Omeka installation(s) you included as arguments (to verify if an argument is a valid path to Omeka, we just look for the `bootstrap.php` file and make sure it includes the string `OMEKA_VERSION`). The output while it's processing is useful but minimal. When it's done, it prints out a basic summary, just to let you know if it skipped something that didn't appear to be a valid Omeka installation. That's it.
+The script creates a new folder in your `~` home directory called `curatescape_utility` and into that pulls [all required and optional](https://github.com/CPHDH/Curatescape#server-side-setup) Curatescape plugins, as well as the Curatescape themes (if any of the repos already exist there, it will check for updates). Then the script will copy the theme and plugin files (sans `.git` files) to where they need to go in the Omeka installation(s) you included as arguments (to verify if an argument is a valid path to Omeka, we just look for the `bootstrap.php` file and make sure it includes the string `OMEKA_VERSION`). The output while it's processing is useful but minimal. When it's done, it prints out a basic summary, just to let you know if it skipped something that didn't appear to be a valid Omeka installation. That's it.
+
+By default each repo is checked out at its latest GitHub release. You can customize this per-repo in the `GITHUB_REPOS_PLUGINS` and `GITHUB_REPOS_THEMES` arrays using an `@ref` suffix:
+
+```
+CPHDH/Curatescape          # defaults to latest release
+CPHDH/Curatescape@latest   # same as above, explicit
+CPHDH/Curatescape@master   # track a branch
+CPHDH/Curatescape@1.0      # pin to a specific tag
+```
 
 # what it doesn't do
 
@@ -31,4 +40,4 @@ The script does not install Omeka. It does not upgrade Omeka. It does not backup
 
 # maintenance
 
-You might want to occasionally remove the `curatescape_utility` directory, which can get pretty big from always checking out the latest tag. Just run `rm -rf curatescape_utility` as needed.
+Repos are cloned shallowly (`--depth 1`) to minimize memory usage and download size, so the `curatescape_utility` working directory stays relatively small. If you ever need to start fresh, just run `rm -rf curatescape_utility` and the script will re-clone everything on the next run.
