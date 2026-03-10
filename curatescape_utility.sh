@@ -16,10 +16,9 @@ BOLD=$(tput bold)
 NORMAL=$(tput sgr0)
 
 GITHUB_REPOS_PLUGINS=(
-	CPHDH/CuratescapeJSON
-	CPHDH/CuratescapeAdminHelper
-	CPHDH/TourBuilder
-	CPHDH/SuperRss
+	CPHDH/Curatescape
+	CPHDH/CuratescapeSeo
+	CPHDH/CuratescapeGalleries
 	omeka/plugin-Geolocation
 	omeka/plugin-SimplePages
 	omeka/plugin-SimpleVocab
