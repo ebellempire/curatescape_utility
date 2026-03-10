@@ -186,7 +186,8 @@ if ! [ -x "$(command -v git)" ]
 				cd ${SCRIPT_LOCATION}
 			fi
 		done
-		for SITE in "$@"; do
+		for SITE_RAW in "$@"; do
+			SITE="${SITE_RAW%/}"
 			if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php; then
 				echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
 				echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
