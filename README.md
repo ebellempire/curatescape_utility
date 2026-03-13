@@ -13,12 +13,8 @@ $ wget https://raw.githubusercontent.com/ebellempire/curatescape_utility/master/
 Then just run it like any shell script, including one or more arguments indicating the location of the installation(s):
 
 ```
-$ sh curatescape_utility.sh path/to/omeka
-$ sh curatescape_utility.sh path/to/omeka another/path/to/omeka
-```
-Depending on your server configuration, you may need to use the following syntax instead:
-```
-$ bash ./curatescape_utility.sh path/to/omeka
+$ bash curatescape_utility.sh path/to/omeka
+$ bash curatescape_utility.sh path/to/omeka another/path/to/omeka
 ```
 
 # what it does
