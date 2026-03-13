@@ -28,8 +28,8 @@ GITHUB_REPOS_PLUGINS=(
 
 # Theme directory structure is automatically detected using theme.ini
 GITHUB_REPOS_THEMES=(
-	CPHDH/theme-curatescape
-	CPHDH/theme-curatescape-echo
+	CPHDH/theme-curatescape@master
+	CPHDH/theme-curatescape-echo@master
 )
 
 # Get the latest GitHub release tag
