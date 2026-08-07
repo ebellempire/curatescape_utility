@@ -16,10 +16,10 @@ BOLD=$(tput bold)
 NORMAL=$(tput sgr0)
 
 GITHUB_REPOS_PLUGINS=(
-	CPHDH/Curatescape@master
+	CPHDH/Curatescape
 	CPHDH/CuratescapeSeo
 	CPHDH/CuratescapeGalleries
-	omeka/plugin-Geolocation@master
+	omeka/plugin-Geolocation
 	omeka/plugin-SimplePages
 	omeka/plugin-SimpleVocab
 	ebellempire/MoreUserRoles
@@ -28,8 +28,8 @@ GITHUB_REPOS_PLUGINS=(
 
 # Theme directory structure is automatically detected using theme.ini
 GITHUB_REPOS_THEMES=(
-	CPHDH/theme-curatescape@master
-	CPHDH/theme-curatescape-echo@master
+	CPHDH/theme-curatescape
+	CPHDH/theme-curatescape-echo
 )
 
 # Get the latest GitHub release tag
