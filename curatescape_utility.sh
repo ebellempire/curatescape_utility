@@ -336,17 +336,21 @@ fi
 # SITES
 PLUGINS_FROM=${LOCAL_PLUGINS:-GitHub}
 THEMES_FROM=${LOCAL_THEMES:-GitHub}
+PLUGINS_LABEL='required and optional plugins'
+[ -n "$LOCAL_PLUGINS" ] && PLUGINS_LABEL='plugins'
+THEMES_LABEL='recommended themes'
+[ -n "$LOCAL_THEMES" ] && THEMES_LABEL='themes'
 for SITE_RAW in "$@"; do
 	SITE="${SITE_RAW%/}"
 	if test -e "${SITE}/bootstrap.php" && grep -q OMEKA_VERSION "${SITE}/bootstrap.php"; then
 		echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
 		SITE_NOTES=''
-		echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
+		echo -e ${CYAN}"█ Syncing ${PLUGINS_LABEL} to ${SITE}/plugins ..." ${NOCOLOR}
 		[ ${#PLUGIN_SOURCES[@]} -gt 0 ] || echo -e ${YELLOW}"█ No plugins to sync" ${NOCOLOR}
 		for PLUGIN_PATH in "${PLUGIN_SOURCES[@]}"; do
 			sync_item plugin "$PLUGIN_PATH" "$SITE"
 		done
-		echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
+		echo -e ${CYAN}"\n█ Syncing ${THEMES_LABEL} to ${SITE}/themes ..." ${NOCOLOR}
 		[ ${#THEME_SOURCES[@]} -gt 0 ] || echo -e ${YELLOW}"█ No themes to sync" ${NOCOLOR}
 		for THEME_PATH in "${THEME_SOURCES[@]}"; do
 			sync_item theme "$THEME_PATH" "$SITE"
