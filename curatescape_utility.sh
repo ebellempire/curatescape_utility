@@ -95,6 +95,57 @@ repo_folder() {
 	echo "${NAME#"$2"}"
 }
 
+# repo_note COLOR REPO_NAME MESSAGE: prints MESSAGE and adds it to the summary under REPO_NAME
+repo_note() {
+	echo -e "${1}█ ${2}: ${3}${NOCOLOR}"
+	SUMMARY+="\n${1}${BOLD}✗ ${2}:${NORMAL}${NOCOLOR}\n  ➡ ${3}\n"${NOCOLOR}
+}
+
+# get_repo REPO_SPEC PARENT PREFIX: clones or updates owner/repo[@ref] in PARENT (in a folder named without the owner or PREFIX) and checks out the ref: a branch, a tag, or the latest release when there's no @ref
+get_repo() {
+	local SPEC=$1 PARENT=$2 PREFIX=$3 REPO_NAME REPO_REF DEST CHECKOUT_REF
+	### parse "owner/repo@ref" or "owner/repo"
+	case $SPEC in
+		*@*) REPO_NAME=${SPEC%@*}; REPO_REF=${SPEC#*@} ;;
+		*) REPO_NAME=$SPEC; REPO_REF=latest ;;
+	esac
+	DEST="${PARENT}/$(repo_folder "$REPO_NAME" "$PREFIX")"
+	CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
+	if [ ! -d "$DEST" ]; then
+		echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
+		if ! clone_repo "$REPO_NAME" "$DEST" "$REPO_REF"; then
+			SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
+			return 1
+		fi
+		if [ -z "$CHECKOUT_REF" ]; then
+			repo_note "$YELLOW" "$REPO_NAME" "No release found (it may not have any, or GitHub's API may be limiting requests); using its default branch"
+			return 0
+		fi
+		echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+		# A branch or tag given with @ref was cloned directly. For the latest release, the shallow clone only has the default branch's newest commit, so the release tag is fetched on its own (cloning at the tag instead would leave a clone that can't fetch branches if the @ref changes later)
+		if [ "$REPO_REF" = latest ]; then
+			if ! git -C "$DEST" fetch -q --depth 1 origin tag "$CHECKOUT_REF" || ! git -C "$DEST" checkout -q "$CHECKOUT_REF"; then
+				rm -rf "$DEST"
+				repo_note "$RED" "$REPO_NAME" "Couldn't check out release '${CHECKOUT_REF}', so it was skipped (see above for details)"
+				return 1
+			fi
+		fi
+	else
+		echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
+		git -C "$DEST" fetch --depth 1 --tags origin
+		if [ -z "$CHECKOUT_REF" ]; then
+			repo_note "$YELLOW" "$REPO_NAME" "No release found (it may not have any, or GitHub's API may be limiting requests); kept the copy from the last run"
+			return 0
+		fi
+		echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
+		if ! git -C "$DEST" checkout -q "$CHECKOUT_REF"; then
+			repo_note "$YELLOW" "$REPO_NAME" "Couldn't check out '${CHECKOUT_REF}'; kept the copy from the last run (see above for details)"
+			return 0
+		fi
+		if git -C "$DEST" symbolic-ref -q HEAD > /dev/null 2>&1; then git -C "$DEST" reset -q --hard FETCH_HEAD; fi
+	fi
+}
+
 # Get theme structure using location of theme.ini
 find_theme_dir() {
 	local REPO_PATH=$1
@@ -265,38 +316,7 @@ if [ -z "$LOCAL_PLUGINS" ]
 		# PLUGINS
 		echo -e ${GREEN}"█ Checking plugin repos ...\n" ${NOCOLOR}
 		for REPO_SPEC in "${GITHUB_REPOS_PLUGINS[@]}"; do
-			### parse "owner/repo@ref" or "owner/repo"
-			if echo "$REPO_SPEC" | grep -q '@'; then
-				REPO_NAME="${REPO_SPEC%@*}"
-				REPO_REF="${REPO_SPEC#*@}"
-			else
-				REPO_NAME="$REPO_SPEC"
-				REPO_REF="latest"
-			fi
-			### just the plugin (removes owner and plugin- prefix from repo name)
-			REPO_DIR=$(repo_folder "$REPO_NAME" plugin-)
-			if [ ! -d "${PLUGINS_DIR}/${REPO_DIR}" ]; then
-				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
-				if ! clone_repo "$REPO_NAME" "${PLUGINS_DIR}/${REPO_DIR}" "$REPO_REF"; then
-					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
-					continue
-				fi
-				cd "${PLUGINS_DIR}/${REPO_DIR}"
-				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
-				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
-				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd "${SCRIPT_LOCATION}"
-			else
-				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-				cd "${PLUGINS_DIR}/${REPO_DIR}"
-				git fetch --depth 1 --tags origin
-				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
-				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
-				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd "${SCRIPT_LOCATION}"
-			fi
+			get_repo "$REPO_SPEC" "$PLUGINS_DIR" plugin-
 		done
 		collect_sources plugin "$PLUGINS_DIR"
 		PLUGIN_SOURCES=("${FOUND[@]}")
@@ -307,38 +327,7 @@ if [ -z "$LOCAL_THEMES" ]
 		# THEMES
 		echo -e ${GREEN}"█ Checking theme repos...\n" ${NOCOLOR}
 		for REPO_SPEC in "${GITHUB_REPOS_THEMES[@]}"; do
-			### parse "owner/repo@ref" or "owner/repo"
-			if echo "$REPO_SPEC" | grep -q '@'; then
-				REPO_NAME="${REPO_SPEC%@*}"
-				REPO_REF="${REPO_SPEC#*@}"
-			else
-				REPO_NAME="$REPO_SPEC"
-				REPO_REF="latest"
-			fi
-			### just the theme (removes owner and theme- prefix from repo name)
-			REPO_DIR=$(repo_folder "$REPO_NAME" theme-)
-			if [ ! -d "${THEMES_DIR}/${REPO_DIR}" ]; then
-				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
-				if ! clone_repo "$REPO_NAME" "${THEMES_DIR}/${REPO_DIR}" "$REPO_REF"; then
-					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
-					continue
-				fi
-				cd "${THEMES_DIR}/${REPO_DIR}"
-				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
-				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
-				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd "${SCRIPT_LOCATION}"
-			else
-				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-				cd "${THEMES_DIR}/${REPO_DIR}"
-				git fetch --depth 1 --tags origin
-				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
-				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
-				git checkout -q "$CHECKOUT_REF"
-				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd "${SCRIPT_LOCATION}"
-			fi
+			get_repo "$REPO_SPEC" "$THEMES_DIR" theme-
 		done
 		collect_sources theme "$THEMES_DIR"
 		THEME_SOURCES=("${FOUND[@]}")
