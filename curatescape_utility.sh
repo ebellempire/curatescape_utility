@@ -4,6 +4,10 @@ NOW=$(date +"%Y-%m-%d-%R")
 DIR=~/curatescape_utility
 PLUGINS_DIR=~/curatescape_utility/plugins
 THEMES_DIR=~/curatescape_utility/themes
+LOCAL_PLUGINS=''
+LOCAL_THEMES=''
+PLUGIN_SOURCES=()
+THEME_SOURCES=()
 SCRIPT_LOCATION=$(pwd)
 ME="${0##*/}"
 
@@ -31,6 +35,21 @@ GITHUB_REPOS_THEMES=(
 	CPHDH/theme-curatescape
 	CPHDH/theme-curatescape-echo
 )
+
+usage() {
+	echo -e "Include at least one path to an existing Omeka installation. Here's an example: \n${YELLOW}bash ${ME} path/to/omeka1 path/to/omeka2${NOCOLOR}"
+	echo -e "Options (before the paths; each takes its value after = or a space):
+  --localplugins DIR   install every plugin folder in DIR instead of downloading the listed plugins from GitHub
+  --localthemes DIR    install every theme folder in DIR instead of downloading the listed themes from GitHub
+  -h, --help           show this help
+For servers that block outgoing requests, upload the new plugin and theme versions to their own separate folders and point the script at them:
+${YELLOW}bash ${ME} --localplugins=path/to/plugins --localthemes=path/to/themes path/to/omeka${NOCOLOR}"
+}
+
+fatal() {
+	echo -e "${RED}█ ERROR: $1${NOCOLOR}"
+	exit 1
+}
 
 # Get the latest GitHub release tag
 get_latest_release() {
@@ -69,6 +88,13 @@ clone_repo() {
 	return 0
 }
 
+# Get the folder a repo goes in, minus the owner, the @ref and the given prefix (omeka/plugin-Geolocation@master with plugin- is Geolocation)
+repo_folder() {
+	local NAME=${1%@*}
+	NAME=${NAME#*/}
+	echo "${NAME#"$2"}"
+}
+
 # Get theme structure using location of theme.ini
 find_theme_dir() {
 	local REPO_PATH=$1
@@ -80,7 +106,7 @@ find_theme_dir() {
 	fi
 
 	# Check subdirectories for theme.ini
-	for SUBDIR in ${REPO_PATH}/*/; do
+	for SUBDIR in "${REPO_PATH}"/*/; do
 		if [ -f "${SUBDIR}theme.ini" ]; then
 			echo "${SUBDIR%/}"
 			return
@@ -88,28 +114,154 @@ find_theme_dir() {
 	done
 
 	# Fallback: assume nested structure
-	echo "${REPO_PATH}/$(basename ${REPO_PATH})"
+	echo "${REPO_PATH}/$(basename "${REPO_PATH}")"
 }
+
+# Print DIR as an absolute path, or fail if it isn't a readable folder. A leading ~ is expanded here, since the shell leaves --localplugins=~/dir alone
+absolute_dir() {
+	local D=$1
+	case $D in "~"|"~/"*) D=$HOME${D#\~} ;; esac
+	[ -d "$D" ] && [ -r "$D" ] && cd -- "$D" 2>/dev/null && pwd -P
+}
+
+# collect_sources KIND DIR: sets FOUND to the plugin or theme folders in DIR (a plugin folder has a plugin.ini; a theme folder has a theme.ini in it or one level down) and skips anything else
+collect_sources() {
+	local KIND=$1 ENTRY SRC
+	FOUND=()
+	for ENTRY in "$2"/*/; do
+		[ -d "$ENTRY" ] || continue
+		ENTRY=${ENTRY%/}
+		if [ "$KIND" = theme ]; then SRC=$(find_theme_dir "$ENTRY"); else SRC=$ENTRY; fi
+		if [ -f "${SRC}/${KIND}.ini" ]; then
+			FOUND+=("$SRC")
+		else
+			echo -e ${YELLOW}"█ Skipping ${ENTRY} (no ${KIND}.ini)" ${NOCOLOR}
+		fi
+	done
+}
+
+# ini_version FILE: prints the version from a plugin.ini or theme.ini (no quotes, no leading v), or nothing if there isn't one
+ini_version() {
+	[ -f "$1" ] || return 0
+	grep -i -m 1 -E '^[[:space:]]*version[[:space:]]*=' "$1" | tr -d "\"'\r" | sed -E 's/^[^=]*=[[:space:]]*[vV]?//; s/[[:space:]]*(;.*)?$//'
+}
+
+# version_lt A B: true if version A sorts before version B
+version_lt() {
+	[ "$1" != "$2" ] && [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
+}
+
+# sync_item KIND SRC SITE: replaces SITE's copy of a plugin or theme folder with SRC (removing files SRC doesn't have), unless the installed copy has a newer version, or has a version when SRC doesn't. Adds to SITE_NOTES.
+sync_item() {
+	local KIND=$1 SRC=$2 SITE=$3 NAME DEST NEW OLD WAS WHY
+	NAME=${SRC##*/}
+	DEST="${SITE}/${KIND}s"
+	NEW=$(ini_version "${SRC}/${KIND}.ini")
+	OLD=$(ini_version "${DEST}/${NAME}/${KIND}.ini")
+	if [ -n "$OLD" ] && { [ -z "$NEW" ] || version_lt "$NEW" "$OLD"; }; then
+		if [ -z "$NEW" ]; then WHY="the new copy has no version number to compare"; else WHY="the new copy (${NEW}) is older"; fi
+		echo -e ${YELLOW}"█ ${NAME}: keeping ${OLD}; ${WHY}" ${NOCOLOR}
+		SITE_NOTES+="\n  ➡ Kept the installed ${NAME} ${KIND} (${OLD}); ${WHY}"
+		return
+	fi
+	if [ -n "$OLD" ]; then WAS=$OLD; elif [ -d "${DEST}/${NAME}" ]; then WAS='no version'; else WAS='not installed'; fi
+	if ! rsync -a --delete --exclude='.git/' "$SRC" "$DEST"; then
+		echo -e ${RED}"█ ${NAME}: failed to sync" ${NOCOLOR}
+		SITE_NOTES+="\n  ➡ Failed to sync the ${NAME} ${KIND} (see above for details)"
+		return
+	fi
+	echo -e "█ ${NAME}: ${WAS} ➡ ${NEW:-no version}"
+}
+
+# OPTIONS: --localplugins=DIR or --localplugins DIR (same for --localthemes), before the paths
+END_OF_OPTIONS=0
+while [ $# -gt 0 ]; do
+	case $1 in
+		--)
+			END_OF_OPTIONS=1
+			shift
+			break
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--localplugins|--localplugins=*|--localthemes|--localthemes=*)
+			OPTION=${1%%=*}
+			case $1 in
+				*=*) VALUE=${1#*=} ;;
+				*) if [ $# -ge 2 ]; then VALUE=$2; shift; else VALUE=''; fi ;;
+			esac
+			[ -n "$VALUE" ] || { echo -e "${RED}█ Option ${OPTION} needs a folder${NOCOLOR}"; usage; exit 1; }
+			if [ "$OPTION" = --localplugins ]; then LOCAL_PLUGINS=$VALUE; else LOCAL_THEMES=$VALUE; fi
+			;;
+		-*)
+			echo -e "${RED}█ Unknown option ${1%%=*}${NOCOLOR}"
+			usage
+			exit 1
+			;;
+		*)
+			break
+			;;
+	esac
+	shift
+done
 
 if [ $# -eq 0 ]
 	then
-		echo -e ${RED}"█ Oops, you forgot to include an argument! ${NOCOLOR}\nPlease include at least one path to an existing Omeka installation. Here's an example: \n${YELLOW}sh curatescape_utility.sh path/to/omeka1 path/to/omeka2" ${NOCOLOR}; exit 1;
+		echo -e ${RED}"█ Oops, you forgot to include an argument! ${NOCOLOR}"
+		usage
+		exit 1
+fi
+if [ "$END_OF_OPTIONS" = 0 ]; then
+	for SITE_RAW in "$@"; do
+		case $SITE_RAW in -*) fatal "Options go before the paths ('${SITE_RAW}' came after a path)" ;; esac
+	done
+fi
+[ "$(printf '%s\n' 1.10 1.9 | sort -V 2>/dev/null | head -n 1)" = 1.9 ] || fatal "This system's sort doesn't support -V, which is needed to compare plugin and theme versions"
+if [ -n "$LOCAL_PLUGINS" ]; then
+	ABS=$(absolute_dir "$LOCAL_PLUGINS") || fatal "Can't open the --localplugins folder '${LOCAL_PLUGINS}'"
+	LOCAL_PLUGINS=$ABS
+fi
+if [ -n "$LOCAL_THEMES" ]; then
+	ABS=$(absolute_dir "$LOCAL_THEMES") || fatal "Can't open the --localthemes folder '${LOCAL_THEMES}'"
+	LOCAL_THEMES=$ABS
 fi
 
 echo -e ${CYAN}"Running Curatescape Utility from ${SCRIPT_LOCATION}/${ME}" ${NOCOLOR}
 
-if ! [ -x "$(command -v git)" ]
+# LOCAL PLUGINS AND THEMES (checked before anything is downloaded)
+if [ -n "$LOCAL_PLUGINS" ]
 	then
-		echo -e ${RED}"█ ERROR: Git is missing or is not executable. Git is required for this utility. Please install Git or use a manual method for adding/updating Curatescape tools." ${NOCOLOR}
-		exit 1
+		echo -e ${GREEN}"█ Using local plugins from ${LOCAL_PLUGINS} (skipping GitHub)" ${NOCOLOR}
+		collect_sources plugin "$LOCAL_PLUGINS"
+		[ ${#FOUND[@]} -gt 0 ] || fatal "No plugins in ${LOCAL_PLUGINS} (none of its folders has a plugin.ini). Point --localplugins at the folder that holds the plugin folders, e.g. curatescape_utility/plugins"
+		PLUGIN_SOURCES=("${FOUND[@]}")
+fi
+if [ -n "$LOCAL_THEMES" ]
+	then
+		echo -e ${GREEN}"█ Using local themes from ${LOCAL_THEMES} (skipping GitHub)" ${NOCOLOR}
+		collect_sources theme "$LOCAL_THEMES"
+		[ ${#FOUND[@]} -gt 0 ] || fatal "No themes in ${LOCAL_THEMES} (none of its folders has a theme.ini). Point --localthemes at the folder that holds the theme folders, e.g. curatescape_utility/themes"
+		THEME_SOURCES=("${FOUND[@]}")
+fi
 
-	else
+# GITHUB (only for whatever wasn't given a local folder)
+if [ -z "$LOCAL_PLUGINS" ] || [ -z "$LOCAL_THEMES" ]
+	then
+		if ! [ -x "$(command -v git)" ]
+			then
+				echo -e ${RED}"█ ERROR: Git is missing or is not executable. Git is required for downloading plugins and themes from GitHub. Please install Git, use --localplugins and --localthemes, or use a manual method for adding/updating Curatescape tools." ${NOCOLOR}
+				exit 1
+		fi
 		echo -e ${GREEN}"█ Git verified ($(git --version))" ${NOCOLOR}
-		# WORKING DIRECTORIES
+		# WORKING DIRECTORY
 		test -d $DIR || mkdir -p $DIR || { echo -e "${RED}█ Unable to create working directory at ${DIR} ${NOCOLOR}"; exit 2; }
-		test -d $PLUGINS_DIR || mkdir -p $PLUGINS_DIR || { echo -e "${RED}█ Unable to create plugins working directory at ${PLUGINS_DIR} ${NOCOLOR}"; exit 2; }
-		test -d $THEMES_DIR || mkdir -p $THEMES_DIR || { echo -e "${RED}█ Unable to create themes working directory at ${THEMES_DIR} ${NOCOLOR}"; exit 2; }
 		echo -e ${GREEN}"█ Working directory verified ('${DIR}')" ${NOCOLOR}
+fi
+if [ -z "$LOCAL_PLUGINS" ]
+	then
+		test -d $PLUGINS_DIR || mkdir -p $PLUGINS_DIR || { echo -e "${RED}█ Unable to create plugins working directory at ${PLUGINS_DIR} ${NOCOLOR}"; exit 2; }
 		# PLUGINS
 		echo -e ${GREEN}"█ Checking plugin repos ...\n" ${NOCOLOR}
 		for REPO_SPEC in "${GITHUB_REPOS_PLUGINS[@]}"; do
@@ -121,33 +273,37 @@ if ! [ -x "$(command -v git)" ]
 				REPO_NAME="$REPO_SPEC"
 				REPO_REF="latest"
 			fi
-			### just the repo (removes owner from path)
-			REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
-			### just the plugin (removes plugin- prefix from repo name)
-			REPO_DIR=${REPO_DIR_PREFIXED/plugin-/}
-			if [ ! -d ${PLUGINS_DIR}/${REPO_DIR} ]; then
+			### just the plugin (removes owner and plugin- prefix from repo name)
+			REPO_DIR=$(repo_folder "$REPO_NAME" plugin-)
+			if [ ! -d "${PLUGINS_DIR}/${REPO_DIR}" ]; then
 				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
 				if ! clone_repo "$REPO_NAME" "${PLUGINS_DIR}/${REPO_DIR}" "$REPO_REF"; then
 					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
 					continue
 				fi
-				cd ${PLUGINS_DIR}/${REPO_DIR}
+				cd "${PLUGINS_DIR}/${REPO_DIR}"
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
 				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd ${SCRIPT_LOCATION}
+				cd "${SCRIPT_LOCATION}"
 			else
 				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-				cd ${PLUGINS_DIR}/${REPO_DIR}
+				cd "${PLUGINS_DIR}/${REPO_DIR}"
 				git fetch --depth 1 --tags origin
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
 				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd ${SCRIPT_LOCATION}
+				cd "${SCRIPT_LOCATION}"
 			fi
 		done
+		collect_sources plugin "$PLUGINS_DIR"
+		PLUGIN_SOURCES=("${FOUND[@]}")
+fi
+if [ -z "$LOCAL_THEMES" ]
+	then
+		test -d $THEMES_DIR || mkdir -p $THEMES_DIR || { echo -e "${RED}█ Unable to create themes working directory at ${THEMES_DIR} ${NOCOLOR}"; exit 2; }
 		# THEMES
 		echo -e ${GREEN}"█ Checking theme repos...\n" ${NOCOLOR}
 		for REPO_SPEC in "${GITHUB_REPOS_THEMES[@]}"; do
@@ -159,51 +315,59 @@ if ! [ -x "$(command -v git)" ]
 				REPO_NAME="$REPO_SPEC"
 				REPO_REF="latest"
 			fi
-			### just the repo (removes owner from path)
-			REPO_DIR_PREFIXED=$(echo $REPO_NAME | cut -d "/" -f 2)
-			### just the theme (removes theme- prefix from repo name)
-			REPO_DIR=${REPO_DIR_PREFIXED/theme-/}
-			if [ ! -d ${THEMES_DIR}/${REPO_DIR} ]; then
+			### just the theme (removes owner and theme- prefix from repo name)
+			REPO_DIR=$(repo_folder "$REPO_NAME" theme-)
+			if [ ! -d "${THEMES_DIR}/${REPO_DIR}" ]; then
 				echo -e ${CYAN}"█ Cloning '${REPO_NAME}'..." ${NOCOLOR}
 				if ! clone_repo "$REPO_NAME" "${THEMES_DIR}/${REPO_DIR}" "$REPO_REF"; then
 					SUMMARY+="\n${RED}${BOLD}✗ ${REPO_NAME}:${NORMAL}${NOCOLOR}\n  ➡ Clone failed (see above for details)\n"${NOCOLOR}
 					continue
 				fi
-				cd ${THEMES_DIR}/${REPO_DIR}
+				cd "${THEMES_DIR}/${REPO_DIR}"
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
 				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd ${SCRIPT_LOCATION}
+				cd "${SCRIPT_LOCATION}"
 			else
 				echo -e ${CYAN}"█ The git repo '${REPO_NAME}' already exists; checking for updates ..." ${NOCOLOR}
-				cd ${THEMES_DIR}/${REPO_DIR}
+				cd "${THEMES_DIR}/${REPO_DIR}"
 				git fetch --depth 1 --tags origin
 				CHECKOUT_REF=$(resolve_ref "$REPO_NAME" "$REPO_REF")
 				echo -e ${CYAN}"Checking out '${CHECKOUT_REF}' for ${REPO_NAME}\n" ${NOCOLOR}
 				git checkout -q "$CHECKOUT_REF"
 				if git symbolic-ref -q HEAD > /dev/null 2>&1; then git reset -q --hard FETCH_HEAD; fi
-				cd ${SCRIPT_LOCATION}
+				cd "${SCRIPT_LOCATION}"
 			fi
 		done
-		for SITE_RAW in "$@"; do
-			SITE="${SITE_RAW%/}"
-			if test -e ${SITE}/bootstrap.php && grep -q OMEKA_VERSION ${SITE}/bootstrap.php; then
-				echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
-				echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
-				rsync -a --stats --exclude='.git/' $PLUGINS_DIR/* ${SITE}/plugins
-				echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
-				for THEME_PATH in ${THEMES_DIR}/*; do
-					ACTUAL_THEME_DIR=$(find_theme_dir ${THEME_PATH})
-					rsync -a --delete --stats --exclude='.git/' ${ACTUAL_THEME_DIR} ${SITE}/themes
-				done
-				SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Installed the latest theme and plugin versions.\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
-			else
-				echo -e ${YELLOW}"\n█ Omeka installation not found at ${SITE}. Skipping this directory.\n" ${NOCOLOR}
-				SUMMARY+="\n${YELLOW}${BOLD}✗ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Skipped (not an Omeka installation)\n"${NOCOLOR}
-			fi
-		done
-		printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
-		echo -e ${CYAN}"\n\n${SUMMARY}\n\n" ${NOCOLOR}
-		printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
+		collect_sources theme "$THEMES_DIR"
+		THEME_SOURCES=("${FOUND[@]}")
 fi
+
+# SITES
+PLUGINS_FROM=${LOCAL_PLUGINS:-GitHub}
+THEMES_FROM=${LOCAL_THEMES:-GitHub}
+for SITE_RAW in "$@"; do
+	SITE="${SITE_RAW%/}"
+	if test -e "${SITE}/bootstrap.php" && grep -q OMEKA_VERSION "${SITE}/bootstrap.php"; then
+		echo -e ${GREEN}"\n█ Omeka installation found at ${SITE}\n" ${NOCOLOR}
+		SITE_NOTES=''
+		echo -e ${CYAN}"█ Syncing required and optional plugins to ${SITE}/plugins ..." ${NOCOLOR}
+		[ ${#PLUGIN_SOURCES[@]} -gt 0 ] || echo -e ${YELLOW}"█ No plugins to sync" ${NOCOLOR}
+		for PLUGIN_PATH in "${PLUGIN_SOURCES[@]}"; do
+			sync_item plugin "$PLUGIN_PATH" "$SITE"
+		done
+		echo -e ${CYAN}"\n█ Syncing recommended themes to ${SITE}/themes ..." ${NOCOLOR}
+		[ ${#THEME_SOURCES[@]} -gt 0 ] || echo -e ${YELLOW}"█ No themes to sync" ${NOCOLOR}
+		for THEME_PATH in "${THEME_SOURCES[@]}"; do
+			sync_item theme "$THEME_PATH" "$SITE"
+		done
+		SUMMARY+="\n${GREEN}${BOLD}✔ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Synced plugins from ${PLUGINS_FROM} and themes from ${THEMES_FROM}.${SITE_NOTES}\n  ➡ Be sure to log into your site to complete the installation/upgrade\n"${NOCOLOR}
+	else
+		echo -e ${YELLOW}"\n█ Omeka installation not found at ${SITE}. Skipping this directory.\n" ${NOCOLOR}
+		SUMMARY+="\n${YELLOW}${BOLD}✗ ${SITE}:${NORMAL}${NOCOLOR}\n  ➡ Skipped (not an Omeka installation)\n"${NOCOLOR}
+	fi
+done
+printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
+echo -e ${CYAN}"\n\n${SUMMARY}\n\n" ${NOCOLOR}
+printf '%*s\n' "${COLUMNS:-$(tput cols)}" '' | tr ' ' -
